@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bird Feeder Camera — Overland Park, KS</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────── -->
+<header>
+  <span class="logo">🐦</span>
+  <div>
+    <h1>Bird Feeder Camera</h1>
+    <div class="subtitle">Overland Park, Kansas — AI-powered species identification</div>
+  </div>
+</header>
+
+<!-- ── Status bar ─────────────────────────────────────── -->
+<div class="status-bar">
+  <div class="status-item">
+    <div class="dot" id="cam-dot"></div>
+    <span>Camera: <span class="value" id="cam-status">Connecting…</span></span>
+  </div>
+  <div class="status-item">
+    Birds today: <span class="value" id="today-count">0</span>
+  </div>
+  <div class="status-item">
+    Last bird: <span class="value" id="last-species">—</span>
+  </div>
+  <div class="status-item">
+    Last motion: <span class="value" id="last-detection">—</span>
+  </div>
+</div>
+
+<!-- ── Main content ───────────────────────────────────── -->
+<div class="main">
+
+  <!-- Left: live camera stream + log -->
+  <div class="camera-panel">
+    <h2>Live Feed</h2>
+
+    <div class="stream-wrapper" id="stream-wrapper">
+      <img id="live-stream"
+           src="/video_feed"
+           alt="Live camera feed"
+           onerror="showStreamOffline()"
+      />
+      <div class="detection-flash" id="detection-flash"></div>
+    </div>
+
+    <div>
+      <h2 style="margin-bottom:6px;">App Log</h2>
+      <div class="log-box" id="log-box">
+        <div class="log-line">Connecting to camera…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: sightings list -->
+  <div class="sightings-panel">
+    <div class="sightings-header">
+      <h2>Sightings Log</h2>
+      <span class="sightings-count" id="sightings-count"></span>
+    </div>
+    <div class="sightings-list" id="sightings-list">
+      <div class="sightings-empty">
+        <div class="icon">🌿</div>
+        <p>Watching for birds…</p>
+        <p style="margin-top:6px;font-size:0.8rem;">
+          Birds detected at the feeder will appear here.
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- Toast notification -->
+<div id="toast">🐦 Bird detected!</div>
+
+<script>
+// ── State ────────────────────────────────────────────────────────────────────
+let previousCount = 0;
+let latestSightingId = 0;
+
+// ── Helpers ──────────────────────────────────────────────────────────────────
+
+function formatTime(ts) {
+  // ts is "YYYY-MM-DD HH:MM:SS"
+  if (!ts) return '';
+  const parts = ts.split(' ');
+  if (parts.length < 2) return ts;
+  const today = new Date().toISOString().slice(0, 10);
+  if (parts[0] === today) return parts[1];  // just the time if today
+  return ts;
+}
+
+function confidenceClass(conf) {
+  const map = { high: 'conf-high', medium: 'conf-medium', low: 'conf-low', none: 'conf-none' };
+  return map[conf] || 'conf-none';
+}
+
+function capitalise(str) {
+  if (!str) return '';
+  return str.charAt(0).toUpperCase() + str.slice(1);
+}
+
+function showStreamOffline() {
+  const wrapper = document.getElementById('stream-wrapper');
+  wrapper.innerHTML = `
+    <div class="stream-offline">
+      <div class="icon">📷</div>
+      <p>Camera stream unavailable</p>
+      <p style="font-size:0.8rem;margin-top:6px;">
+        Check that the app is running and CAMERA_URL is correct in .env
+      </p>
+    </div>
+  `;
+}
+
+function showToast(msg) {
+  const toast = document.getElementById('toast');
+  toast.textContent = msg;
+  toast.classList.add('show');
+  setTimeout(() => toast.classList.remove('show'), 3500);
+}
+
+function flashDetection() {
+  const flash = document.getElementById('detection-flash');
+  if (!flash) return;
+  flash.classList.add('active');
+  setTimeout(() => flash.classList.remove('active'), 600);
+}
+
+// ── Render sightings ─────────────────────────────────────────────────────────
+
+function renderSightings(sightings) {
+  const list = document.getElementById('sightings-list');
+  const countEl = document.getElementById('sightings-count');
+
+  if (!sightings || sightings.length === 0) {
+    list.innerHTML = `
+      <div class="sightings-empty">
+        <div class="icon">🌿</div>
+        <p>Watching for birds…</p>
+        <p style="margin-top:6px;font-size:0.8rem;">Birds detected at the feeder will appear here.</p>
+      </div>`;
+    countEl.textContent = '';
+    return;
+  }
+
+  countEl.textContent = `${sightings.length} sighting${sightings.length !== 1 ? 's' : ''}`;
+
+  list.innerHTML = sightings.map(s => {
+    const name = (s.common_name && s.common_name !== 'Unknown')
+                  ? s.common_name : s.species;
+    const species = (s.species && s.species !== s.common_name && s.species !== 'Unknown')
+                    ? s.species : '';
+
+    let thumbHtml;
+    if (s.photo_path) {
+      // Build URL relative to /photos/
+      const rel = s.photo_path.replace(/^\.\/photos\//, '');
+      thumbHtml = `<img class="sighting-thumb" src="/photos/${rel}" alt="${name}"
+                       onerror="this.outerHTML='<div class=sighting-thumb-placeholder>🐦</div>'" />`;
+    } else {
+      thumbHtml = `<div class="sighting-thumb-placeholder">🐦</div>`;
+    }
+
+    const desc = s.description
+      ? `<div class="description">${s.description.slice(0, 120)}${s.description.length > 120 ? '…' : ''}</div>`
+      : '';
+
+    return `
+      <div class="sighting-card">
+        ${thumbHtml}
+        <div class="sighting-info">
+          <div class="common-name">${capitalise(name) || 'Unknown bird'}</div>
+          ${species ? `<div class="species">${species}</div>` : ''}
+          <div class="meta">
+            <span class="time">${formatTime(s.timestamp)}</span>
+            <span class="confidence-badge ${confidenceClass(s.confidence)}">${s.confidence || 'unknown'}</span>
+          </div>
+          ${desc}
+        </div>
+      </div>`;
+  }).join('');
+}
+
+// ── Poll /api/sightings ──────────────────────────────────────────────────────
+
+async function updateSightings() {
+  try {
+    const res = await fetch('/api/sightings');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    if (data.length > 0) {
+      const newestId = data[0].id;
+      if (latestSightingId > 0 && newestId > latestSightingId) {
+        // New sighting arrived
+        const newBird = data[0].common_name || data[0].species || 'a bird';
+        showToast(`🐦 ${newBird} detected!`);
+        flashDetection();
+      }
+      latestSightingId = newestId;
+    }
+
+    renderSightings(data);
+  } catch (_) {}
+}
+
+// ── Poll /api/status ─────────────────────────────────────────────────────────
+
+async function updateStatus() {
+  try {
+    const res = await fetch('/api/status');
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const dot    = document.getElementById('cam-dot');
+    const status = document.getElementById('cam-status');
+    if (data.camera_connected) {
+      dot.classList.add('online');
+      status.textContent = 'Connected';
+    } else {
+      dot.classList.remove('online');
+      status.textContent = 'Disconnected';
+    }
+
+    document.getElementById('today-count').textContent  = data.today_count ?? 0;
+    document.getElementById('last-species').textContent  = data.last_species || '—';
+    document.getElementById('last-detection').textContent = data.last_detection || '—';
+
+    // Update log
+    if (data.log_messages && data.log_messages.length > 0) {
+      const logBox = document.getElementById('log-box');
+      const isBirdLine = line => line.includes('Identified:') || line.includes('detected');
+      logBox.innerHTML = data.log_messages.map(line =>
+        `<div class="log-line${isBirdLine(line) ? ' bird' : ''}">${line}</div>`
+      ).join('');
+    }
+  } catch (_) {}
+}
+
+// ── Kick off polling ─────────────────────────────────────────────────────────
+
+updateSightings();
+updateStatus();
+setInterval(updateSightings, 5000);
+setInterval(updateStatus,   4000);
+</script>
+
+</body>
+</html>
