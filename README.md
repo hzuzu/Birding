@@ -16,37 +16,62 @@ An AI-powered bird identification system for your backyard feeder. The app conne
 
 ---
 
-## Camera Recommendations
+## Camera: Wyze Cam v3 (~$35)
 
-### Best Choice for Beginners: Reolink E1 Outdoor (~$60)
+This app is configured for the **Wyze Cam v3**. It's affordable, fully weatherproof (IP67), handles Kansas heat and cold, and has color night vision. It requires a one-time firmware step to enable RTSP video streaming — follow the steps below carefully.
 
-**Why choose this:** It works with this app out of the box — no special configuration needed beyond setting a password.
+### What to Buy
 
-- Fully weatherproof (IP67) — handles Kansas heat (131°F) and cold (-14°F)
-- Night vision for dawn/dusk bird activity
-- Connects to your home WiFi
-- Video streaming (RTSP) works without any firmware modification
+- **Wyze Cam v3** — available on Amazon, Wyze.com, Best Buy
+- **MicroSD card** — any Class 10 card, 8 GB or larger (needed for firmware flash)
+- **MicroSD card reader** — most laptops have one, or buy a USB adapter (~$5)
 
-**RTSP URL format:**
+### One-Time Wyze RTSP Firmware Setup
+
+Wyze cameras need a special firmware version to stream video to this app. You only do this once.
+
+**Step 1 — Download the firmware**
+
+Go to Wyze's support site and search for "Wyze Cam v3 RTSP firmware". Download the file named `demo.bin` (firmware version 4.61.0.1).
+
+**Step 2 — Copy to microSD card**
+
+- Insert the microSD card into your computer
+- Copy the `demo.bin` file to the **root** of the card (not inside any folder)
+- Safely eject the card
+
+**Step 3 — Flash the camera**
+
+- **Unplug** the Wyze Cam v3 from power
+- Insert the microSD card into the camera's card slot (bottom of camera)
+- Hold down the **Setup button** (back of camera) while plugging the power cable back in
+- Keep holding the button until the light flashes **purple** (about 3–6 seconds)
+- Release the button and wait ~3 minutes — the camera will reboot automatically
+- The light will turn **solid blue** when flashing is complete
+
+**Step 4 — Enable RTSP in the Wyze app**
+
+1. Open the Wyze app on your phone
+2. Tap the camera → tap the gear icon (Settings) → tap **Advanced Settings**
+3. Tap **RTSP** → toggle it **ON**
+4. Note the RTSP URL shown — it will look like: `rtsp://192.168.1.X/live`
+5. Set a username and password when prompted (remember these for `.env`)
+
+**Your RTSP URL format:**
+```
+rtsp://USERNAME:PASSWORD@192.168.1.X/live
+```
+
+### Alternative: Reolink E1 Outdoor (~$60)
+
+If the firmware step feels intimidating, the Reolink E1 Outdoor works out of the box — just set a password in the Reolink app and RTSP is ready. URL format:
 ```
 rtsp://admin:YOUR_PASSWORD@192.168.1.X//h264Preview_01_main
 ```
 
-### Budget Option: Wyze Cam v3 (~$35)
-
-Works well but requires a **one-time firmware flash** to enable RTSP streaming:
-1. Download RTSP firmware v4.61.0.1 from Wyze's website
-2. Copy `demo.bin` to a microSD card → insert into camera while unplugged → plug in
-3. Once flashed, enable RTSP in the Wyze app under Advanced Settings
-
-**RTSP URL format:**
-```
-rtsp://admin:YOUR_PASSWORD@192.168.1.X/live
-```
-
 ### Premium Option: Reolink RLC-810A (~$90)
 
-One ethernet cable provides both power and internet (PoE) — no outdoor outlet needed. 4K resolution gives the best bird identification accuracy. Same setup as the E1 Outdoor.
+One ethernet cable provides both power and internet (PoE) — no outdoor outlet needed. 4K resolution, same setup as E1 Outdoor.
 
 ### Camera Placement
 
@@ -104,8 +129,8 @@ cp .env.example .env
 Now open `.env` in a text editor (Notepad on Windows, TextEdit on Mac). Fill in:
 
 ```dotenv
-# Your camera's RTSP URL — replace the IP and password:
-CAMERA_URL=rtsp://admin:mypassword@192.168.1.100//h264Preview_01_main
+# Wyze Cam v3 RTSP URL — replace IP, username, and password:
+CAMERA_URL=rtsp://admin:mypassword@192.168.1.100/live
 
 # Your Claude AI API key:
 ANTHROPIC_API_KEY=sk-ant-your-key-here
@@ -114,7 +139,8 @@ ANTHROPIC_API_KEY=sk-ant-your-key-here
 **To find your camera's IP address:**
 - Log into your router (usually at 192.168.1.1 or 192.168.0.1 in your browser)
 - Look for "Connected Devices" or "DHCP Clients"
-- Find your camera by its name (e.g., "Reolink-E1")
+- Find your camera by its name (e.g., "Wyze Cam")
+- Or check the Wyze app: tap the camera → Settings → Device Info → IP Address
 
 **To test the RTSP URL before running the app:**
 - Download [VLC Media Player](https://www.videolan.org/vlc/) (free)
@@ -203,10 +229,11 @@ Based on your Overland Park location, you'll likely spot:
 ### Camera won't connect
 
 1. **Check RTSP URL:** Open VLC → Media → Open Network Stream → paste the URL. If VLC can't connect, the URL or password is wrong.
-2. **Check IP address:** Camera IPs can change after reboot. Check your router's device list again.
-3. **Enable RTSP:** In the Reolink app → Camera Settings → Advanced → make sure RTSP is ON.
-4. **Firewall:** On Windows, allow Python through Windows Firewall if prompted.
-5. **Try webcam:** Temporarily set `CAMERA_URL=0` in `.env` to test with your laptop camera.
+2. **Check IP address:** Camera IPs can change after reboot. Check the Wyze app (Settings → Device Info → IP Address) or your router's device list.
+3. **Enable RTSP:** In the Wyze app → camera Settings → Advanced Settings → RTSP must be toggled ON.
+4. **Wrong firmware:** If RTSP doesn't appear in the Wyze app, the RTSP firmware flash didn't work — repeat the firmware steps in the Camera section above.
+5. **Firewall:** On Windows, allow Python through Windows Firewall if prompted.
+6. **Try webcam:** Temporarily set `CAMERA_URL=0` in `.env` to test with your laptop camera.
 
 ### No birds being detected / too many false alarms
 
